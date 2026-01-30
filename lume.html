@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="pt-pt">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lume - Puzzle Diário</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;600;800&display=swap');
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #0f172a;
+            color: #f1f5f9;
+        }
+
+        .grid-cell {
+            aspect-ratio: 1 / 1;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .cell-wall {
+            background-color: #1e293b;
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .cell-empty {
+            background-color: #334155;
+            cursor: pointer;
+        }
+
+        .cell-lit {
+            background-color: #fef08a;
+            box-shadow: inset 0 0 20px rgba(253, 224, 71, 0.4);
+        }
+
+        .bulb-icon {
+            animation: bulb-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes bulb-pop {
+            0% {
+                transform: scale(0);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .error-flash {
+            animation: error-shake 0.4s ease;
+            color: #ef4444 !important;
+        }
+
+        @keyframes error-shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(-4px);
+            }
+
+            75% {
+                transform: translateX(4px);
+            }
+        }
+
+        .win-glow {
+            box-shadow: 0 0 30px rgba(253, 224, 71, 0.3);
+        }
+
+        .hint-pulse {
+            animation: hint-glow 1.5s infinite;
+        }
+
+        @keyframes hint-glow {
+
+            0%,
+            100% {
+                outline: 0px solid transparent;
+            }
+
+            50% {
+                outline: 4px solid #fbbf24;
+                outline-offset: 2px;
+            }
+        }
+    </style>
+</head>
+
+<body class="flex flex-col items-center min-h-screen p-4 md:p-8">
+
+    <!-- Header -->
+    <header class="w-full max-w-sm flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-extrabold tracking-tighter text-yellow-400">LUME</h1>
+            <p id="dailyDate" class="text-[10px] tracking-[0.2em] text-slate-500 font-bold uppercase"></p>
+        </div>
+        <div class="flex gap-2">
+            <button id="resetBtn" title="Limpar Tabuleiro"
+                class="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors border border-slate-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                </svg>
+            </button>
+            <button id="hintBtn" title="Pedir Dica"
+                class="p-2 bg-slate-800 rounded-full text-amber-400 hover:bg-slate-700 transition-colors border border-slate-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                        d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+                    <path d="M9 18h6" />
+                    <path d="M10 22h4" />
+                </svg>
+            </button>
+            <button id="helpBtn" title="Ajuda"
+                class="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors border border-slate-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Game Board -->
+    <div id="boardContainer" class="bg-slate-800/50 p-3 rounded-[2rem] border border-slate-700 shadow-2xl mb-8">
+        <div id="grid" class="grid grid-cols-7 gap-1.5 w-[320px] md:w-[400px]">
+            <!-- Grid generated via JS -->
+        </div>
+    </div>
+
+    <!-- Controls & Status -->
+    <div class="w-full max-w-sm space-y-4">
+        <div id="statusMsg"
+            class="text-center text-sm font-semibold text-slate-400 h-12 flex items-center justify-center px-4 leading-tight">
+            Ilumina todo o labirinto.
+        </div>
+
+        <div id="winPanel"
+            class="hidden animate-bounce-subtle bg-yellow-400 text-slate-950 p-6 rounded-3xl text-center shadow-xl">
+            <h2 class="text-xl font-black mb-1 uppercase">Iluminação Completa!</h2>
+            <p class="text-xs font-bold opacity-70 mb-4">Parabéns pelo puzzle de hoje.</p>
+            <button id="shareBtn"
+                class="w-full bg-slate-950 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2">
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+                PARTILHAR
+            </button>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal"
+        class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm hidden flex items-center justify-center p-6 z-50">
+        <div class="bg-slate-900 border border-slate-700 p-8 rounded-[2.5rem] max-w-xs w-full">
+            <h3 class="text-xl font-bold text-yellow-400 mb-6">Regras do Lume</h3>
+            <ul class="space-y-4 text-slate-400 text-sm">
+                <li class="flex gap-3">
+                    <span class="text-yellow-400 font-bold">1.</span>
+                    <p>Clica para colocar lâmpadas (<svg class="inline text-yellow-400" width="14" height="14"
+                            viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
+                        </svg>).</p>
+                </li>
+                <li class="flex gap-3">
+                    <span class="text-yellow-400 font-bold">2.</span>
+                    <p>Clica com o botão direito para marcar espaços vazios (×).</p>
+                </li>
+                <li class="flex gap-3">
+                    <span class="text-yellow-400 font-bold">3.</span>
+                    <p>Uma lâmpada ilumina em linha reta até encontrar uma parede.</p>
+                </li>
+                <li class="flex gap-3">
+                    <span class="text-yellow-400 font-bold">4.</span>
+                    <p>Números indicam quantas lâmpadas devem estar adjacentes.</p>
+                </li>
+                <li class="flex gap-3">
+                    <span class="text-yellow-400 font-bold">5.</span>
+                    <p>Lâmpadas não podem iluminar-se umas às outras.</p>
+                </li>
+            </ul>
+            <button id="closeHelp"
+                class="w-full mt-8 bg-slate-800 text-white py-4 rounded-2xl font-bold">ENTENDIDO</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Core Game Logic ---
+        const SIZE = 7;
+        const grid = document.getElementById('grid');
+        const state = {
+            walls: {}, // { "r,c": number or -1 }
+            bulbs: new Set(),
+            solution: new Set(),
+            won: false
+        };
+
+        const now = new Date();
+        const seed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+        document.getElementById('dailyDate').textContent = now.toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
+
+        function seededRandom(s) {
+            const x = Math.sin(s) * 10000;
+            return x - Math.floor(x);
+        }
+
+        // --- Improved Generation: Walls first, then Solution ---
+        function generateLevel() {
+            state.walls = {};
+            state.bulbs.clear();
+            state.solution.clear();
+
+            // 1. Place Walls first
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    if (seededRandom(seed + r * SIZE + c) < 0.25) {
+                        state.walls[`${r},${c}`] = -1;
+                    }
+                }
+            }
+
+            // 2. Build Solution on top of fixed walls
+            const coords = [];
+            for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+                if (state.walls[`${r},${c}`] === undefined) coords.push([r, c]);
+            }
+
+            // Deterministic shuffle of coordinates
+            for (let i = coords.length - 1; i > 0; i--) {
+                const j = Math.floor(seededRandom(seed + i + 500) * (i + 1));
+                [coords[i], coords[j]] = [coords[j], coords[i]];
+            }
+
+            // Greedy bulb placement for the master solution
+            coords.forEach(([r, c]) => {
+                if (!isLitByBulbs(r, c, state.solution)) {
+                    state.solution.add(`${r},${c}`);
+                }
+            });
+
+            // 3. Fill wall numbers based on that master solution
+            for (const key in state.walls) {
+                const [r, c] = key.split(',').map(Number);
+                let count = 0;
+                [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                    if (state.solution.has(`${r + dr},${c + dc}`)) count++;
+                });
+
+                // Show number only on some walls to keep it a challenge
+                if (seededRandom(seed + r + c + 100) > 0.4) {
+                    state.walls[key] = count;
+                }
+            }
+        }
+
+        function isLitByBulbs(r, c, bulbSet) {
+            if (bulbSet.has(`${r},${c}`)) return true;
+            let lit = false;
+            [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                let nr = r, nc = c;
+                while (true) {
+                    nr += dr; nc += dc;
+                    if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE || state.walls[`${nr},${nc}`] !== undefined) break;
+                    if (bulbSet.has(`${nr},${nc}`)) { lit = true; break; }
+                }
+            });
+            return lit;
+        }
+
+        function createBoard() {
+            grid.innerHTML = '';
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.id = `cell-${r}-${c}`;
+                    cell.className = 'grid-cell rounded-lg flex items-center justify-center font-bold text-lg';
+
+                    const wall = state.walls[`${r},${c}`];
+                    if (wall !== undefined) {
+                        cell.classList.add('cell-wall');
+                        cell.textContent = wall === -1 ? '' : wall;
+                        cell.style.color = '#94a3b8';
+                    } else {
+                        cell.classList.add('cell-empty');
+                        cell.addEventListener('click', () => toggleBulb(r, c));
+                        cell.addEventListener('contextmenu', (e) => {
+                            e.preventDefault();
+                            if (state.won) return;
+                            if (state.bulbs.has(`${r},${c}`)) toggleBulb(r, c);
+                            cell.textContent = cell.textContent === '×' ? '' : '×';
+                            cell.style.color = '#64748b';
+                            updateLighting();
+                        });
+                    }
+                    grid.appendChild(cell);
+                }
+            }
+            updateLighting();
+        }
+
+        function toggleBulb(r, c) {
+            if (state.won) return;
+            const key = `${r},${c}`;
+            if (state.bulbs.has(key)) state.bulbs.delete(key);
+            else {
+                state.bulbs.add(key);
+                document.getElementById(`cell-${r}-${c}`).textContent = '';
+            }
+
+            document.querySelectorAll('.hint-pulse').forEach(el => el.classList.remove('hint-pulse'));
+            updateLighting();
+            checkWin();
+        }
+
+        function updateLighting() {
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    const cell = document.getElementById(`cell-${r}-${c}`);
+                    if (state.walls[`${r},${c}`] === undefined) {
+                        cell.classList.remove('cell-lit');
+                        if (cell.textContent !== '×') cell.innerHTML = '';
+                    }
+                }
+            }
+
+            // Light from user bulbs
+            state.bulbs.forEach(key => {
+                const [br, bc] = key.split(',').map(Number);
+                const bulbCell = document.getElementById(`cell-${br}-${bc}`);
+                bulbCell.innerHTML = `<svg class="bulb-icon text-yellow-900" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/></svg>`;
+
+                [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                    let nr = br, nc = bc;
+                    while (true) {
+                        nr += dr; nc += dc;
+                        if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE || state.walls[`${nr},${nc}`] !== undefined) break;
+                        document.getElementById(`cell-${nr}-${nc}`).classList.add('cell-lit');
+                    }
+                });
+                bulbCell.classList.add('cell-lit');
+            });
+
+            // Check bulb-to-bulb
+            state.bulbs.forEach(key => {
+                const [br, bc] = key.split(',').map(Number);
+                const cell = document.getElementById(`cell-${br}-${bc}`);
+                let illuminated = false;
+
+                state.bulbs.forEach(otherKey => {
+                    if (key === otherKey) return;
+                    const [or, oc] = otherKey.split(',').map(Number);
+                    if (br === or || bc === oc) {
+                        let blocked = false;
+                        const dr = br === or ? 0 : (br > or ? 1 : -1);
+                        const dc = bc === oc ? 0 : (bc > oc ? 1 : -1);
+                        let nr = or + dr, nc = oc + dc;
+                        while (nr !== br || nc !== bc) {
+                            if (state.walls[`${nr},${nc}`] !== undefined) { blocked = true; break; }
+                            nr += dr; nc += dc;
+                        }
+                        if (!blocked) illuminated = true;
+                    }
+                });
+                if (illuminated && cell.querySelector('svg')) {
+                    cell.querySelector('svg').classList.add('text-red-600', 'error-flash');
+                }
+            });
+        }
+
+        function checkWin() {
+            let allLit = true;
+            let wallsOk = true;
+            let bulbsOk = true;
+
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    if (state.walls[`${r},${c}`] === undefined) {
+                        const cell = document.getElementById(`cell-${r}-${c}`);
+                        if (!cell.classList.contains('cell-lit')) allLit = false;
+                    }
+                }
+            }
+
+            Object.keys(state.walls).forEach(key => {
+                const num = state.walls[key];
+                if (num === -1) return;
+                const [wr, wc] = key.split(',').map(Number);
+                let count = 0;
+                [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                    if (state.bulbs.has(`${wr + dr},${wc + dc}`)) count++;
+                });
+                const wallEl = document.getElementById(`cell-${wr}-${wc}`);
+                if (count === num) wallEl.style.color = '#fbce03';
+                else {
+                    wallEl.style.color = (count > num) ? '#ef4444' : '#94a3b8';
+                    wallsOk = false;
+                }
+            });
+
+            const currentBulbs = Array.from(state.bulbs);
+            for (let i = 0; i < currentBulbs.length; i++) {
+                const [r1, c1] = currentBulbs[i].split(',').map(Number);
+                for (let j = i + 1; j < currentBulbs.length; j++) {
+                    const [r2, c2] = currentBulbs[j].split(',').map(Number);
+                    if (r1 === r2 || c1 === c2) {
+                        let blocked = false;
+                        const dr = r1 === r2 ? 0 : (r1 > r2 ? 1 : -1);
+                        const dc = c1 === c2 ? 0 : (c1 > c2 ? 1 : -1);
+                        let nr = r2 + dr, nc = c2 + dc;
+                        while (nr !== r1 || nc !== c1) {
+                            if (state.walls[`${nr},${nc}`] !== undefined) { blocked = true; break; }
+                            nr += dr; nc += dc;
+                        }
+                        if (!blocked) bulbsOk = false;
+                    }
+                }
+            }
+
+            if (allLit && wallsOk && bulbsOk && state.bulbs.size > 0) {
+                state.won = true;
+                document.getElementById('boardContainer').classList.add('win-glow');
+                document.getElementById('winPanel').classList.remove('hidden');
+                document.getElementById('statusMsg').classList.add('hidden');
+            }
+        }
+
+        function setStatus(msg) {
+            const el = document.getElementById('statusMsg');
+            el.textContent = msg;
+            el.classList.add('text-amber-400');
+            setTimeout(() => el.classList.remove('text-amber-400'), 2000);
+        }
+
+        function provideHint() {
+            if (state.won) return;
+            document.querySelectorAll('.hint-pulse').forEach(el => el.classList.remove('hint-pulse'));
+
+            // Validation: Check for invalid bulbs first
+            for (const bKey of state.bulbs) {
+                if (!state.solution.has(bKey)) {
+                    const [er, ec] = bKey.split(',').map(Number);
+                    highlight(er, ec, "Esta lâmpada está numa posição incorreta.");
+                    return;
+                }
+            }
+
+            // Logic: Wall clues
+            for (const key in state.walls) {
+                const num = state.walls[key];
+                if (num <= 0) continue;
+                const [wr, wc] = key.split(',').map(Number);
+                const candidates = [];
+                let bCount = 0;
+                [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                    const nr = wr + dr, nc = wc + dc;
+                    if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && state.walls[`${nr},${nc}`] === undefined) {
+                        if (state.bulbs.has(`${nr},${nc}`)) bCount++;
+                        else if (document.getElementById(`cell-${nr}-${nc}`).textContent !== '×') candidates.push({ r: nr, c: nc });
+                    }
+                });
+                if (candidates.length > 0 && candidates.length === (num - bCount)) {
+                    highlight(candidates[0].r, candidates[0].c, "Logicamente, deve haver uma lâmpada aqui para esta parede.");
+                    return;
+                }
+            }
+
+            // Global Hint: Next solution bulb
+            for (const sKey of state.solution) {
+                if (!state.bulbs.has(sKey)) {
+                    const [sr, sc] = sKey.split(',').map(Number);
+                    highlight(sr, sc, "Tenta colocar uma lâmpada neste setor.");
+                    return;
+                }
+            }
+
+            setStatus("Não foram encontradas dicas imediatas.");
+        }
+
+        function highlight(r, c, msg) {
+            const cell = document.getElementById(`cell-${r}-${c}`);
+            cell.classList.add('hint-pulse');
+            setStatus(msg);
+        }
+
+        // --- Controls ---
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            if (state.won) return;
+            state.bulbs.clear();
+            createBoard();
+            setStatus("Tabuleiro limpo.");
+        });
+
+        document.getElementById('shareBtn').addEventListener('click', () => {
+            const dateStr = now.toLocaleDateString();
+            let shareTxt = `LUME Diário (${dateStr})\n💡 Desafio Iluminado!\n\n#LumePuzzle`;
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = shareTxt;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+            const btn = document.getElementById('shareBtn');
+            btn.textContent = "COPIADO!";
+            setTimeout(() => btn.textContent = "PARTILHAR", 2000);
+        });
+
+        document.getElementById('helpBtn').addEventListener('click', () => document.getElementById('helpModal').classList.remove('hidden'));
+        document.getElementById('closeHelp').addEventListener('click', () => document.getElementById('helpModal').classList.add('hidden'));
+        document.getElementById('hintBtn').addEventListener('click', provideHint);
+
+        generateLevel();
+        createBoard();
+    </script>
+</body>
+
+</html>
